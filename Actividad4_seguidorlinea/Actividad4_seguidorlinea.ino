@@ -34,13 +34,13 @@ uint16_t integralCoefficient;
 
 void selectP1()
 {
-  maxSpeed = 300;
-  minSpeed = 10;
+  maxSpeed = 350;
+  minSpeed = 50;
   baseSpeed = maxSpeed;
   calibrationSpeed = 75;
   proportional = 64; // P coefficient = 1/4
-  derivative = 800; // D coefficient = 1
-  integralCoefficient= .25;
+  derivative = 850; // D coefficient = 1
+  integralCoefficient= .15;
 }
 
 void selectP2()
@@ -277,20 +277,15 @@ void loop() {
         rightSpeed = constrain(rightSpeed, minSpeed, (int16_t)maxSpeed);
         motors.setSpeeds(leftSpeed, rightSpeed);
     } else {
-        // Si estamos en una recta, reducir la corrección y controlar la velocidad
-        int16_t leftSpeed = (int16_t)baseSpeed;
-        int16_t rightSpeed = (int16_t)baseSpeed;
-
-        // Calcular la diferencia de velocidad entre los motores para corregir la trayectoria
-        int16_t turnDirection = (error > 0) ? -1 : 1;
-        int16_t turnAmount = abs(error) / 100; // Ajusta este valor según la sensibilidad de tu robot
-        int16_t turnSpeed = baseSpeed / 2; // Ajusta este valor para controlar la velocidad de corrección
-
-        leftSpeed += turnDirection * turnAmount * turnSpeed;
-        rightSpeed -= turnDirection * turnAmount * turnSpeed;
+        // Si estamos en una recta, controlar la velocidad de forma suave
+        // Ajusta estos valores según la sensibilidad de tu robot
+        int16_t correction = map(abs(error), 0, 2000, 0, baseSpeed / 2);
+        int16_t leftSpeed = (int16_t)baseSpeed + correction;
+        int16_t rightSpeed = (int16_t)baseSpeed - correction;
 
         leftSpeed = constrain(leftSpeed, minSpeed, (int16_t)maxSpeed);
         rightSpeed = constrain(rightSpeed, minSpeed, (int16_t)maxSpeed);
         motors.setSpeeds(leftSpeed, rightSpeed);
     }
 }
+
