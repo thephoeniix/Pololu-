@@ -5,7 +5,6 @@ using namespace Pololu3piPlus32U4;
 
 OLED display;
 BumpSensors bumpSensors;
-
 Buzzer buzzer;
 LineSensors lineSensors;
 Motors motors;
@@ -15,7 +14,6 @@ ButtonC buttonC;
 
 bool color = 0;
 int16_t position=0;
-
 int16_t lastError = 0;
 
 #define NUM_SENSORS 5
@@ -23,24 +21,12 @@ unsigned int lineSensorValues[NUM_SENSORS];
 
 uint16_t maxSpeed;
 int16_t minSpeed;
-
 uint16_t baseSpeed;
-
 uint16_t calibrationSpeed;
 
 //for the cronometer
 unsigned long startTime = 0; // Variable to store the start time
-bool bumped = false; // Flag to indicate if the bump sensor was triggered
 unsigned long elapsedTime;
-
-
-
-// PID configuration: This example is configured for a default
-// proportional constant of 1/4 and a derivative constant of 1, which
-// seems to work well at low speeds for all of our 3pi+ editions.  You
-// will probably want to use trial and error to tune these constants
-// for your particular 3pi+ and line course, especially if you
-// increase the speed.
 
 uint16_t proportional; // coefficient of the P term * 256
 uint16_t derivative; // coefficient of the D term * 256
@@ -48,12 +34,12 @@ uint16_t integralCoefficient;
 
 void selectP1()
 {
-  maxSpeed = 350;
+  maxSpeed = 300;
   minSpeed = 10;
   baseSpeed = maxSpeed;
-  calibrationSpeed = 70;
+  calibrationSpeed = 75;
   proportional = 64; // P coefficient = 1/4
-  derivative = 1200; // D coefficient = 1
+  derivative = 800; // D coefficient = 1
   integralCoefficient= .25;
 }
 
@@ -105,12 +91,12 @@ void selectEdition()
   display.clear();
   display.print(F("Select"));
   display.gotoXY(0,1);
-  display.print(F("edition"));
+  display.print(F("Track"));
   delay(1000);
 
   static const PololuMenuItem items[] = {
-    { F("Pista 1"), selectP1 },
-    { F("Pista 2"), selectP2 },
+    { F("Track 1"), selectP1 },
+    { F("Track 2"), selectP2 },
   };
 
   menu.setItems(items, 2);
@@ -148,6 +134,29 @@ void printBar(uint8_t height)
   display.print(barChars[height]);
 }
 
+void showReadings()
+{
+  display.clear();
+
+  while(!buttonB.getSingleDebouncedPress())
+  {
+    uint16_t position = lineSensors.readLineBlack(lineSensorValues);
+
+    display.gotoXY(0, 0);
+    display.print(position);
+    display.print("    ");
+    display.gotoXY(0, 1);
+    for (uint8_t i = 0; i < NUM_SENSORS; i++)
+    {
+      uint8_t barHeight = map(lineSensorValues[i], 0, 1000, 0, 8);
+      printBar(barHeight);
+    }
+
+    delay(50);
+  }
+}
+
+
 void calibrateSensors()
 {
   display.clear();
@@ -173,17 +182,12 @@ void calibrateSensors()
 }
 
 
+
 void setup()
 {
-
-  bumpSensors.calibrate();
-
-  // Uncomment if necessary to correct motor directions:
-  //motors.flipLeftMotor(1);
-  //motors.flipRightMotor(1);
-
   loadCustomCharacters();
 
+  bumpSensors.calibrate();
   // Play a little welcome song
   buzzer.play(">g32>>c32");
 
@@ -198,6 +202,7 @@ void setup()
   while(!buttonB.getSingleDebouncedPress());
 
   calibrateSensors();
+  showReadings();
 
 
   // Play music and wait for it to finish before we start driving.
@@ -219,6 +224,12 @@ void loop() {
         while(!buttonB.getSingleDebouncedPress());
         // Re-select the edition
         selectEdition();
+        while(!buttonB.getSingleDebouncedPress())
+        display.clear();
+        display.print(F("Go!"));
+        buzzer.play("L16 cdegreg4");
+  
+        while(buzzer.isPlaying());
         // Exit loop to prevent further actions until the robot is restarted
         startTime = millis();
         
@@ -237,7 +248,6 @@ void loop() {
     display.print(elapsedTime % 1000); // Convert milliseconds to seconds
     display.print("ms");
 
-
     // Read line sensors based on the selected color
     if (color == 0)
         position = lineSensors.readLineWhite(lineSensorValues);
@@ -250,42 +260,37 @@ void loop() {
     // Determine if the robot is completely off the line
     bool offLine = (position <= 10 || position >= 4000);
 
-    // If off the line, implement basic line-following behavior
-    if (offLine) {
-        // If completely off the line, stop the motors
-        motors.setSpeeds(0, 0);
-        // Calculate the direction to turn based on the error
+    // Aplicar corrección solo si no estamos en una recta
+    if (!offLine) {
+        // PID control para seguimiento de línea
+        int32_t cumulativeError = 0;
+        cumulativeError += error;
+        int32_t integralTerm = cumulativeError * (int32_t)integralCoefficient / 256;
+        int16_t speedDifference = error * (int32_t)proportional / 256  + (error - lastError) * (int32_t)derivative / 256 + integralTerm;
+
+        lastError = error;
+
+        int16_t leftSpeed = (int16_t)baseSpeed + speedDifference;
+        int16_t rightSpeed = (int16_t)baseSpeed - speedDifference;
+
+        leftSpeed = constrain(leftSpeed, minSpeed, (int16_t)maxSpeed);
+        rightSpeed = constrain(rightSpeed, minSpeed, (int16_t)maxSpeed);
+        motors.setSpeeds(leftSpeed, rightSpeed);
+    } else {
+        // Si estamos en una recta, reducir la corrección y controlar la velocidad
+        int16_t leftSpeed = (int16_t)baseSpeed;
+        int16_t rightSpeed = (int16_t)baseSpeed;
+
+        // Calcular la diferencia de velocidad entre los motores para corregir la trayectoria
         int16_t turnDirection = (error > 0) ? -1 : 1;
-        // Apply a small turn in the appropriate direction
-        motors.setSpeeds(baseSpeed * turnDirection, baseSpeed * -turnDirection);
-        // Delay for a short period to allow the robot to turn
-        delay(100);
-        // Read line sensors again after turning
-        if (color == 0)
-            position = lineSensors.readLineWhite(lineSensorValues);
-        else
-            position = lineSensors.readLineBlack(lineSensorValues);
-        // If the robot is back on the line, resume line following
-        if (position != 0 && position != 5000) {
-            // Reset the last error for PID control
-            lastError = 0;
-            // Exit loop to start line following again
-            return;
-        }
+        int16_t turnAmount = abs(error) / 100; // Ajusta este valor según la sensibilidad de tu robot
+        int16_t turnSpeed = baseSpeed / 2; // Ajusta este valor para controlar la velocidad de corrección
+
+        leftSpeed += turnDirection * turnAmount * turnSpeed;
+        rightSpeed -= turnDirection * turnAmount * turnSpeed;
+
+        leftSpeed = constrain(leftSpeed, minSpeed, (int16_t)maxSpeed);
+        rightSpeed = constrain(rightSpeed, minSpeed, (int16_t)maxSpeed);
+        motors.setSpeeds(leftSpeed, rightSpeed);
     }
-
-    // PID control for line following
-    int32_t cumulativeError = 0;
-    cumulativeError += error;
-    int32_t integralTerm = cumulativeError * (int32_t)integralCoefficient / 256;
-    int16_t speedDifference = error * (int32_t)proportional / 256  + (error - lastError) * (int32_t)derivative / 256 + integralTerm;
-
-    lastError = error;
-
-    int16_t leftSpeed = (int16_t)baseSpeed + speedDifference;
-    int16_t rightSpeed = (int16_t)baseSpeed - speedDifference;
-
-    leftSpeed = constrain(leftSpeed, minSpeed, (int16_t)maxSpeed);
-    rightSpeed = constrain(rightSpeed, minSpeed, (int16_t)maxSpeed);
-    motors.setSpeeds(leftSpeed, rightSpeed);
 }
