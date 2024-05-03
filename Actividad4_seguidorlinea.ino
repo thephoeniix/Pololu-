@@ -28,6 +28,13 @@ uint16_t baseSpeed;
 
 uint16_t calibrationSpeed;
 
+//for the cronometer
+unsigned long startTime = 0; // Variable to store the start time
+bool bumped = false; // Flag to indicate if the bump sensor was triggered
+unsigned long elapsedTime;
+
+
+
 // PID configuration: This example is configured for a default
 // proportional constant of 1/4 and a derivative constant of 1, which
 // seems to work well at low speeds for all of our 3pi+ editions.  You
@@ -53,11 +60,11 @@ void selectP1()
 void selectP2()
 {
   maxSpeed = 350;
-  minSpeed = 10;
+  minSpeed = 30;
   baseSpeed = maxSpeed;
   calibrationSpeed = 70;
-  proportional = 64; // P coefficient = 1/4
-  derivative = 1200; // D coefficient = 1
+  proportional = 128; // P coefficient = 1/4
+  derivative = 800; // D coefficient = 1
   integralCoefficient= .25;
 }
 
@@ -110,7 +117,6 @@ void selectEdition()
   menu.setDisplay(display);
   menu.setBuzzer(buzzer);
   menu.setButtons(buttonA, buttonB, buttonC);
-
   while(!menu.select());
   
 
@@ -166,31 +172,6 @@ void calibrateSensors()
   motors.setSpeeds(0, 0);
 }
 
-// Displays the estimated line position and a bar graph of sensor
-// readings on the LCD. Returns after the user presses B.
-void showReadings()
-{
-  display.clear();
-
-  while(!buttonB.getSingleDebouncedPress())
-  {
-    if (color==0)
-      position = lineSensors.readLineWhite(lineSensorValues);
-    else
-      position = lineSensors.readLineBlack(lineSensorValues);
-    display.gotoXY(0, 0);
-    display.print(position);
-    display.print("    ");
-    display.gotoXY(0, 1);
-    for (uint8_t i = 0; i < NUM_SENSORS; i++)
-    {
-      uint8_t barHeight = map(lineSensorValues[i], 0, 1000, 0, 8);
-      printBar(barHeight);
-    }
-
-    delay(50);
-  }
-}
 
 void setup()
 {
@@ -225,51 +206,86 @@ void setup()
   buzzer.play("L16 cdegreg4");
   
   while(buzzer.isPlaying());
+
+  startTime = millis(); // Record the start time
+  
 }
 
-void loop()
-{
-     if (bumpSensors.read() != 0) {
+void loop() {
+    // Check if any bump sensor is triggered
+    if (bumpSensors.read() != 0) {
+        // Stop the motors
         motors.setSpeeds(0, 0);
+        while(!buttonB.getSingleDebouncedPress());
+        // Re-select the edition
         selectEdition();
+        // Exit loop to prevent further actions until the robot is restarted
+        startTime = millis();
+        
+        return;
+    }
 
-      }
+    // Calculate elapsed time
+    elapsedTime = millis() - startTime;
+    // Display elapsed time
+    display.clear();
+    display.gotoXY(0, 0);
+    display.print("Time: ");
+    display.gotoXY(0, 1);
+    display.print(elapsedTime / 1000); // Convert milliseconds to seconds
+    display.print("s");
+    display.print(elapsedTime % 1000); // Convert milliseconds to seconds
+    display.print("ms");
 
-  // Get the position of the line.  Note that we must provide
-  // the "lineSensorValues" argument to readlineWhite() here, even
-  // though we are not interested in the individual sensor
-  // readings.
-  if (color==0)
-    position = lineSensors.readLineWhite(lineSensorValues);
 
-  else
-    position = lineSensors.readLineBlack(lineSensorValues);
-  // Our "error" is how far we are away from the center of the
-  // line, which corresponds to position 2000.
-  int16_t error = position - 2000;
+    // Read line sensors based on the selected color
+    if (color == 0)
+        position = lineSensors.readLineWhite(lineSensorValues);
+    else
+        position = lineSensors.readLineBlack(lineSensorValues);
 
-  // Get motor speed difference using proportional and derivative
-  // PID terms (the integral term is generally not very useful
-  // for line following).
-  int32_t cumulativeError = 0;
-  cumulativeError += error;
-  int32_t integralTerm = cumulativeError * (int32_t)integralCoefficient / 256;
-  int16_t speedDifference = error * (int32_t)proportional / 256  + (error - lastError) * (int32_t)derivative / 256 + integralTerm;
+    // Calculate error
+    int16_t error = position - 2000;
 
-  lastError = error;
+    // Determine if the robot is completely off the line
+    bool offLine = (position <= 10 || position >= 4000);
 
-  // Get individual motor speeds.  The sign of speedDifference
-  // determines if the robot turns left or right.
-  int16_t leftSpeed = (int16_t)baseSpeed + speedDifference;
-  int16_t rightSpeed = (int16_t)baseSpeed - speedDifference;
+    // If off the line, implement basic line-following behavior
+    if (offLine) {
+        // If completely off the line, stop the motors
+        motors.setSpeeds(0, 0);
+        // Calculate the direction to turn based on the error
+        int16_t turnDirection = (error > 0) ? -1 : 1;
+        // Apply a small turn in the appropriate direction
+        motors.setSpeeds(baseSpeed * turnDirection, baseSpeed * -turnDirection);
+        // Delay for a short period to allow the robot to turn
+        delay(100);
+        // Read line sensors again after turning
+        if (color == 0)
+            position = lineSensors.readLineWhite(lineSensorValues);
+        else
+            position = lineSensors.readLineBlack(lineSensorValues);
+        // If the robot is back on the line, resume line following
+        if (position != 0 && position != 5000) {
+            // Reset the last error for PID control
+            lastError = 0;
+            // Exit loop to start line following again
+            return;
+        }
+    }
 
-  // Constrain our motor speeds to be between 0 and maxSpeed.
-  // One motor will always be turning at maxSpeed, and the other
-  // will be at maxSpeed-|speedDifference| if that is positive,
-  // else it will be stationary.  For some applications, you
-  // might want to allow the motor speed to go negative so that
-  // it can spin in reverse.
-  leftSpeed = constrain(leftSpeed, minSpeed, (int16_t)maxSpeed);
-  rightSpeed = constrain(rightSpeed, minSpeed, (int16_t)maxSpeed);
-  motors.setSpeeds(leftSpeed, rightSpeed);
+    // PID control for line following
+    int32_t cumulativeError = 0;
+    cumulativeError += error;
+    int32_t integralTerm = cumulativeError * (int32_t)integralCoefficient / 256;
+    int16_t speedDifference = error * (int32_t)proportional / 256  + (error - lastError) * (int32_t)derivative / 256 + integralTerm;
+
+    lastError = error;
+
+    int16_t leftSpeed = (int16_t)baseSpeed + speedDifference;
+    int16_t rightSpeed = (int16_t)baseSpeed - speedDifference;
+
+    leftSpeed = constrain(leftSpeed, minSpeed, (int16_t)maxSpeed);
+    rightSpeed = constrain(rightSpeed, minSpeed, (int16_t)maxSpeed);
+    motors.setSpeeds(leftSpeed, rightSpeed);
 }
