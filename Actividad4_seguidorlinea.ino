@@ -35,15 +35,9 @@ unsigned long elapsedTime;
 
 
 
-// PID configuration: This example is configured for a default
-// proportional constant of 1/4 and a derivative constant of 1, which
-// seems to work well at low speeds for all of our 3pi+ editions.  You
-// will probably want to use trial and error to tune these constants
-// for your particular 3pi+ and line course, especially if you
-// increase the speed.
 
-uint16_t proportional; // coefficient of the P term * 256
-uint16_t derivative; // coefficient of the D term * 256
+uint16_t proportional; // coefficient of the P term 
+uint16_t derivative; // coefficient of the D term
 uint16_t integralCoefficient;
 
 void selectP1()
@@ -177,11 +171,6 @@ void setup()
 {
 
   bumpSensors.calibrate();
-
-  // Uncomment if necessary to correct motor directions:
-  //motors.flipLeftMotor(1);
-  //motors.flipRightMotor(1);
-
   loadCustomCharacters();
 
   // Play a little welcome song
