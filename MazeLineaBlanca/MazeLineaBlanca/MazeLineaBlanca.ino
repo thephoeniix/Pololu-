@@ -1,5 +1,4 @@
 #include <Pololu3piPlus32U4.h>
-
 using namespace Pololu3piPlus32U4;
 
 OLED display;
@@ -17,6 +16,9 @@ unsigned char path_length = 0; // the length of the path
 
 bool startExecution = false;
 
+#define NUM_SENSORS 5
+unsigned int lineSensorValues[NUM_SENSORS];
+
 void setup() {
   display.init();
   display.clear();
@@ -31,10 +33,53 @@ void loop() {
       display.print(F("Solving maze..."));
       delay(1000);
       calibrateSensors(); // Calibration before maze solving
-      solveMaze();
+      showReadings();
+      if (buttonB.isPressed())
+        solveMaze();
     }
   }
 }
+
+void loadCustomCharacters(){
+  static const char levels[] PROGMEM = {
+    0, 0, 0, 0, 0, 0, 0, 63, 63, 63, 63, 63, 63, 63
+  };
+  display.loadCustomCharacter(levels + 0, 0);  // 1 bar
+  display.loadCustomCharacter(levels + 1, 1);  // 2 bars
+  display.loadCustomCharacter(levels + 2, 2);  // 3 bars
+  display.loadCustomCharacter(levels + 3, 3);  // 4 bars
+  display.loadCustomCharacter(levels + 4, 4);  // 5 bars
+  display.loadCustomCharacter(levels + 5, 5);  // 6 bars
+  display.loadCustomCharacter(levels + 6, 6);  // 7 bars
+}
+
+void printBar(uint8_t height){
+  if (height > 8) { height = 8; }
+  const char barChars[] = {' ', 0, 1, 2, 3, 4, 5, 6, (char)255};
+  display.print(barChars[height]);
+}
+
+void showReadings(){
+  display.clear();
+
+  while(!buttonB.getSingleDebouncedPress())
+  {
+    uint16_t position = lineSensors.readLineBlack(lineSensorValues);
+
+    display.gotoXY(0, 0);
+    display.print(position);
+    display.print("    ");
+    display.gotoXY(0, 1);
+    for (uint8_t i = 0; i < NUM_SENSORS; i++)
+    {
+      uint8_t barHeight = map(lineSensorValues[i], 0, 1000, 0, 8);
+      printBar(barHeight);
+    }
+
+    delay(50);
+  }
+}
+
 void calibrateSensors(){
   display.clear();
 
@@ -97,7 +142,7 @@ void solveMaze() {
         
     // Check for the ending spot.
  
-    if(sensors[1] > 600 && sensors[2] > 600 && sensors[3] > 600)
+    if(sensors[1] > 600 && sensors[2] > 600 && sensors[3] > 600 && sensors[0] > 600 && sensors[5] > 600)
       motors.setSpeeds(0,0);
       break;
         
@@ -218,7 +263,7 @@ void turn(char dir){
         delay(500);
         break;
     case 'S':
-        // Don't do anything!
+        motors.setSpeeds(0,0);
         break;
     }
 }
@@ -228,8 +273,7 @@ void turn(char dir){
 // sequence xBx, we can simplify it by cutting out the dead end.  For
 // example, LBL -> S, because a single S bypasses the dead end
 // represented by LBL.
-void simplify_path()
-{
+void simplify_path(){
     // only simplify the path if the second-to-last turn was a 'B'
     if(path_length < 3 || path[path_length-2] != 'B')
         return;
@@ -281,8 +325,7 @@ void simplify_path()
 // found_right, which indicate whether there is an exit in each of the
 // three directions, applying the "left hand on the wall" strategy.
 char select_turn(unsigned char found_left, unsigned char found_straight,
-  unsigned char found_right)
-{
+  unsigned char found_right){
     // Make a decision about how to turn.  The following code
     // implements a left-hand-on-the-wall strategy, where we always
     // turn as far to the left as possible.

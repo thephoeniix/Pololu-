@@ -34,7 +34,7 @@ uint16_t integralCoefficient;
 
 void selectP1()
 {
-  maxSpeed = 350;
+  maxSpeed = 300;
   minSpeed = 50;
   baseSpeed = maxSpeed;
   calibrationSpeed = 75;
@@ -46,12 +46,12 @@ void selectP1()
 void selectP2()
 {
   maxSpeed = 350;
-  minSpeed = 30;
+  minSpeed = 50;
   baseSpeed = maxSpeed;
-  calibrationSpeed = 70;
-  proportional = 128; // P coefficient = 1/4
-  derivative = 800; // D coefficient = 1
-  integralCoefficient= .25;
+  calibrationSpeed = 75;
+  proportional = 64; // P coefficient = 1/4
+  derivative = 850; // D coefficient = 1
+  integralCoefficient= .5;
 }
 
 void white(){
