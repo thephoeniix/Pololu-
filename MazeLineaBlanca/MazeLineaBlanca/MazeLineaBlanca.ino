@@ -125,9 +125,9 @@ void solveMaze() {
     lineSensors.readLineWhite(sensors);
         
     // Check for left and right exits.
-    if(sensors[0] > 600)
+    if(sensors[0] < 200 && sensors[4] > 1000)
       found_left = 1;
-    if(sensors[4] > 600)
+    if(sensors[4] < 200 && sensors[0] > 1000)
       found_right = 1;
         
     // Drive straight a bit more - this is enough to line up our
@@ -137,13 +137,13 @@ void solveMaze() {
         
     // Check for a straight exit.
     lineSensors.readLineWhite(sensors);
-    if(sensors[1] > 600 || sensors[2] > 600 || sensors[3] > 600)
+    if(sensors[1] < 200 && sensors[2] < 200 && sensors[3] < 200 && sensors[0] > 1000 && sensors[4] > 1000)
       found_straight = 1;
         
     // Check for the ending spot.
  
-    if(sensors[1] > 600 && sensors[2] > 600 && sensors[3] > 600 && sensors[0] > 600 && sensors[5] > 600)
-      motors.setSpeeds(0,0);
+    if(sensors[1] < 100 && sensors[2] < 100 && sensors[3] < 100 && sensors[0] < 100 && sensors[4] < 100)
+      turn('S');
       break;
         
     // Intersection identification is complete.
@@ -159,7 +159,7 @@ void solveMaze() {
     path_length ++;
         
     // Simplify the learned path.
-    simplify_path();
+    //simplify_path();
         
     // Display the path on the OLED.
     //display_path();
@@ -175,7 +175,7 @@ void solveMaze() {
     for(int i = 0; i < path_length; i++) {
       follow_segment();
       // Drive straight while slowing down, as before.
-      motors.setSpeeds(50,50);
+      motors.setSpeeds(40,40);
       delay(50);
       motors.setSpeeds(40,40);
       delay(200);
@@ -220,7 +220,7 @@ void follow_segment() {
 
     // Compute the actual motor settings.  We never set either motor
     // to a negative value.
-    const int max = 60; // the maximum speed
+    const int max = 50; // the maximum speed
     if(power_difference > max)
       power_difference = max;
     if(power_difference < -max)
@@ -233,11 +233,12 @@ void follow_segment() {
     // determining whether there is a line straight ahead, and the
     // sensors 0 and 4 for detecting lines going to the left and
     // right.
-    if(sensors[1] < 600 && sensors[2] < 600 && sensors[3] < 600 && sensors[0] < 600 && sensors[4] < 600) {
+    if(sensors[1] > 800 && sensors[2] > 800 && sensors[3] > 800 && sensors[0] > 800 && sensors[4] > 800) {
       // There is no line visible ahead, and we didn't see any
       // intersection.  Must be a dead end.
+      turn('B');
       return;
-    } else if(sensors[0] > 600 || sensors[4] > 600) {
+    } else if(sensors[0] < 600 || sensors[4] < 600) {
       // Found an intersection.
       return;
     }
@@ -259,7 +260,7 @@ void turn(char dir){
         break;
     case 'B':
         // Turn around.
-        motors.setSpeeds(80,-80);
+        motors.setSpeeds(-80,80);
         delay(500);
         break;
     case 'S':
