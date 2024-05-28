@@ -20,6 +20,7 @@ bool startExecution = false;
 unsigned int lineSensorValues[NUM_SENSORS];
 
 void setup() {
+  display.setLayout21x8();
   display.init();
   display.clear();
   display.print(F("Press B to start"));
@@ -64,19 +65,37 @@ void showReadings(){
 
   while(!buttonB.getSingleDebouncedPress())
   {
-    uint16_t position = lineSensors.readLineBlack(lineSensorValues);
+    uint16_t position = lineSensors.readLineWhite(lineSensorValues);
 
     display.gotoXY(0, 0);
-    display.print(position);
+    //display.print(position);
     display.print("    ");
-    display.gotoXY(0, 1);
-    for (uint8_t i = 0; i < NUM_SENSORS; i++)
+    display.gotoXY(0, 0);
+    /*for (uint8_t i = 0; i < NUM_SENSORS; i++)
     {
       uint8_t barHeight = map(lineSensorValues[i], 0, 1000, 0, 8);
       printBar(barHeight);
     }
+    */
 
-    delay(50);
+
+    display.print(lineSensorValues[0]);
+    display.print("  ");
+    display.gotoXY(0, 1);
+    display.print(lineSensorValues[1]);
+    display.print("  ");
+    display.gotoXY(0, 2);
+    display.print(lineSensorValues[2]);
+    display.print("  ");
+    display.gotoXY(0, 3);
+    display.print(lineSensorValues[3]);
+    display.print("  ");
+    display.gotoXY(0, 4);
+    display.print(lineSensorValues[4]);
+    display.print("  ");
+   
+
+    delay(100);
   }
 }
 
@@ -103,99 +122,13 @@ void calibrateSensors(){
   motors.setSpeeds(0, 0);
 }
 
-void solveMaze() {
-  while(1) {
-    follow_segment();
-    // Drive straight a bit.  This helps us in case we entered the
-    // intersection at an angle.
-    // Note that we are slowing down - this prevents the robot
-    // from tipping forward too much.
-    motors.setSpeeds(50,50);
-    delay(50);
-        
-    // These variables record whether the robot has seen a line to the
-    // left, straight ahead, and right, while examining the current
-    // intersection.
-    unsigned char found_left = 0;
-    unsigned char found_straight = 0;
-    unsigned char found_right = 0;
-        
-    // Now read the sensors and check the intersection type.
-    unsigned int sensors[5];
-    lineSensors.readLineWhite(sensors);
-        
-    // Check for left and right exits.
-    if(sensors[0] < 200 && sensors[4] > 1000)
-      found_left = 1;
-    if(sensors[4] < 200 && sensors[0] > 1000)
-      found_right = 1;
-        
-    // Drive straight a bit more - this is enough to line up our
-    // wheels with the intersection.
-    motors.setSpeeds(40,40);
-    delay(200);
-        
-    // Check for a straight exit.
-    lineSensors.readLineWhite(sensors);
-    if(sensors[1] < 200 && sensors[2] < 200 && sensors[3] < 200 && sensors[0] > 1000 && sensors[4] > 1000)
-      found_straight = 1;
-        
-    // Check for the ending spot.
- 
-    if(sensors[1] < 100 && sensors[2] < 100 && sensors[3] < 100 && sensors[0] < 100 && sensors[4] < 100)
-      turn('S');
-      break;
-        
-    // Intersection identification is complete.
-    // If the maze has been solved, we can follow the existing
-    // path.  Otherwise, we need to learn the solution.
-    unsigned char dir = select_turn(found_left, found_straight, found_right);
-        
-    // Make the turn indicated by the path.
-    turn(dir);
-        
-    // Store the intersection in the path variable.
-    path[path_length] = dir;
-    path_length ++;
-        
-    // Simplify the learned path.
-    //simplify_path();
-        
-    // Display the path on the OLED.
-    //display_path();
-  }
-     
-  // Now enter an infinite loop - we can re-run the maze as many
-  // times as we want to.
-  while(1) {
-    // Beep to show that we finished the maze.
-    
-    // Wait for the user to press a button...
-
-    for(int i = 0; i < path_length; i++) {
-      follow_segment();
-      // Drive straight while slowing down, as before.
-      motors.setSpeeds(40,40);
-      delay(50);
-      motors.setSpeeds(40,40);
-      delay(200);
-            
-      // Make a turn according to the instruction stored in
-      // path[i].
-      turn(path[i]);
-    }
-         
-    // Follow the last segment up to the finish.
-    follow_segment();
-
-    // Now we should be at the finish!  Restart the loop.
-  }
-}
-
 void follow_segment() {
+  display.gotoXY(0, 5);
+  display.print(" FS ");
+
   int last_proportional = 0;
   long integral = 0;
-
+  
   while(1) {
     // Get the position of the line.
     unsigned int sensors[5];
@@ -220,7 +153,7 @@ void follow_segment() {
 
     // Compute the actual motor settings.  We never set either motor
     // to a negative value.
-    const int max = 50; // the maximum speed
+    const int max = 10; // the maximum speed
     if(power_difference > max)
       power_difference = max;
     if(power_difference < -max)
@@ -233,7 +166,7 @@ void follow_segment() {
     // determining whether there is a line straight ahead, and the
     // sensors 0 and 4 for detecting lines going to the left and
     // right.
-    if(sensors[1] > 800 && sensors[2] > 800 && sensors[3] > 800 && sensors[0] > 800 && sensors[4] > 800) {
+    if(sensors[1] > 950 && sensors[2] > 950 && sensors[3] > 950 && sensors[0] > 950 && sensors[4] > 950) {
       // There is no line visible ahead, and we didn't see any
       // intersection.  Must be a dead end.
       turn('B');
@@ -246,26 +179,40 @@ void follow_segment() {
 }
 
 void turn(char dir){
+  display.gotoXY(0, 5);
+  display.print(" T ");
     switch(dir)
     {
     case 'L':
         // Turn left.
         motors.setSpeeds(-80,80);
         delay(250);
+        display.gotoXY(0, 6);
+        display.print(" CL ");
+
         break;
     case 'R':
         // Turn right.
         motors.setSpeeds(80,-80);
         delay(250);
+        display.gotoXY(0, 6);
+        display.print(" CR ");
+
         break;
     case 'B':
         // Turn around.
         motors.setSpeeds(-80,80);
         delay(500);
+        display.gotoXY(0, 6);
+        display.print(" B ");
+
         break;
     case 'S':
         motors.setSpeeds(0,0);
+        display.gotoXY(0, 6);
+        display.print(" CS ");
         break;
+
     }
 }
 
@@ -330,12 +277,98 @@ char select_turn(unsigned char found_left, unsigned char found_straight,
     // Make a decision about how to turn.  The following code
     // implements a left-hand-on-the-wall strategy, where we always
     // turn as far to the left as possible.
-    if(found_left)
-        return 'L';
-    else if(found_straight)
-        return 'S';
-    else if(found_right)
-        return 'R';
+    if(found_left){
+      return 'L';
+      display.gotoXY(0, 6);
+      display.print(" FL ");
+    }
+        
+    else if(found_straight){
+      return 'S';
+      display.gotoXY(0, 6);
+      display.print(" FST ");
+    }
+    else if(found_right){
+      return 'R';
+      display.gotoXY(0, 6);
+      display.print(" FR ");
+    }
     else
-        return 'B';
+        {
+      return 'B';
+      display.gotoXY(0, 6);
+      display.print(" FB ");
+    }
 }
+
+void solveMaze() {
+  bool finish = 0;
+  while(finish == 0) {
+    follow_segment();
+    // Drive straight a bit.  This helps us in case we entered the
+    // intersection at an angle.
+    // Note that we are slowing down - this prevents the robot
+    // from tipping forward too much.
+    motors.setSpeeds(50,50);
+    delay(50);
+        
+    // These variables record whether the robot has seen a line to the
+    // left, straight ahead, and right, while examining the current
+    // intersection.
+    unsigned char found_left = 0;
+    unsigned char found_straight = 0;
+    unsigned char found_right = 0;
+        
+    // Now read the sensors and check the intersection type.
+    unsigned int sensors[5];
+    lineSensors.readLineWhite(sensors);
+        
+    // Check for left and right exits.
+    if(sensors[0] < 200 && sensors[4] > 900)
+      found_left = 1;
+    if(sensors[4] < 200 && sensors[0] > 900)
+      found_right = 1;
+      
+    // Drive straight a bit more - this is enough to line up our
+    // wheels with the intersection.
+    motors.setSpeeds(40,40);
+    delay(200);
+        
+    // Check for a straight exit.
+    lineSensors.readLineWhite(sensors);
+    if(sensors[1] < 300 && sensors[2] < 100 && sensors[3] < 300 )
+      found_straight = 1;
+    delay(50);     
+    // Check for the ending spot.
+ 
+    if(sensors[1] < 100 && sensors[2] < 100 && sensors[3] < 100 && sensors[0] < 100 && sensors[4] < 100){
+      motors.setSpeeds(30, 30);
+      delay(100);
+      if(sensors[1] < 5 && sensors[2] < 5 && sensors[3] < 5 && sensors[0] < 5 && sensors[4] < 5){
+        finish =1;
+        break;
+      }
+      
+    }
+    // Intersection identification is complete.
+    // If the maze has been solved, we can follow the existing
+    // path.  Otherwise, we need to learn the solution.
+    unsigned char dir = select_turn(found_left, found_straight, found_right);
+        
+    // Make the turn indicated by the path.
+    turn(dir);
+        
+    // Store the intersection in the path variable.
+    path[path_length] = dir;
+    path_length ++;
+        
+    // Simplify the learned path.
+    //simplify_path();
+        
+    // Display the path on the OLED.
+    //display_path();
+  }
+  motors.setSpeeds(0,0);
+
+}
+
