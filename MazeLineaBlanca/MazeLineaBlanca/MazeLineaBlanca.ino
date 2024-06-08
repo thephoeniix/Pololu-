@@ -425,7 +425,8 @@ void loop() {
     delay(1000);
     
     simplify_path();
-    path[path_length-1]='0';
+    path[path_length-1]="";
+    path_length=path_length-1;
     finish = 0;
     while (!buttonB.getSingleDebouncedPress()){
       Serial.print("Path: ");
